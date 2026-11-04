@@ -6,20 +6,20 @@ JS used to generate map from predefined layout array, movement and collision det
 
 Vibes of old 3D games from the '90s.
 
-I'm pretty sure I'm not the first person, who tried this approach on creating 3D in browser. However I have not done any reserch to confirm that :D 
-
 ## Controls
 
 - **Up Arrow** / **W** / **Numpad 8** - move forward
+- **Down Arrow** / **S** / **Numpad 2** - move back
 - **Left Arrow** / **A** / **Numpad 4** - turn left
 - **Right Arrow** / **D** / **Numpad 6** - turn right
+- **Q** / **Numpad 1** - strafe left
+- **E** / **Numpad 3** - strafe right
 - **M** - toggle between First Person / Top-down view
-
-Right now only walking forward or turning work. Only single action :( no simultaneous walk and turn. No stepping backwards or strafing :(
 
 ## How to "Play"
 
-Just walk... step onto yellow spot to trigger alert with winning message (Right now can be done multiple times)
+Just walk... step onto yellow spot to trigger alert with winning message. After that, to restart again you have to refresh the page.
+You can check your current positionon the minimap in the lower right corner
 
 ## This is still work in progress
 

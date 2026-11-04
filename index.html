@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preload" href="wall.webp" as="image" type="image/webp">
+    <link rel="preload" href="skybox.webp" as="image" type="image/webp">
     <title>3D Labyrynth - a Pure HTML, CSS & Vanilla JS Game/3D world Proof of Concept</title>
     <meta name="description" content="Walkable 3D Labirynth made entirely with HTML, CSS, and Vanilla JS. No use of canvas or any external animation or 3D graphic libraries. Only DIVs and CSS 3d transforms. Proof of Concept. WIP.">
     <style>
@@ -24,6 +25,8 @@
             --start-position-x: 1000px;
             --start-position-y: 1900px;
             --start-angle: 0rad;
+
+            --fog-density: 100;
 
         }
         *, *::before, *::after {
@@ -55,16 +58,32 @@
             display: block;
             width: 100%;
             height: 100%;
-            background: var(--sky);
+            background: url(skybox.webp) var(--skybox, 0px) 100%/ auto 175% repeat-x;
             perspective: var(--perspective, 1000px);
             overflow:hidden;
+            position:relative;
 
+        }
+
+        @property --headbob {
+            syntax: '<length>';
+            inherits: false;
+            initial-value: -55px;
+        }
+
+        @keyframes headbob {
+            from {
+                --headbob: -55px;
+            }
+            to {
+                --headbob: -52px;
+            }
         }
 
         #area {
             width: var(--map-size, 2000px);
             height: var(--map-size, 2000px);
-            background: var(--grass);
+            /* background: var(--grass); */
 
             position:absolute;
             top: 50%;
@@ -72,10 +91,23 @@
             transform-origin: var(--x, var(--start-position-x, 1000px)) var(--y, var(--start-position-y, 1900px));
             translate: calc(var(--x, var(--start-position-x, 1000px)) * -1) calc(var(--y, var(--start-position-y, 1900px)) * -1);
             transform-style: preserve-3d;
-            transform: rotateX(90deg) translateY(var(--perspective, 1000px)) translateZ(-55px) rotateZ(var(--angle, 0rad) );
-            
+            transform: rotateX(90deg) translateY(var(--perspective, 1000px)) rotateY(var(--headtilt, 0deg)) translateZ(var(--headbob, -55px)) rotateZ(var(--angle, 0rad));
+            transition: transform 100ms ease;
+
             &.topdown {
                 transform: rotateZ(var(--angle, 0rad) );
+            }
+
+            &:is(.forward, .backward, .left, .right) {
+                animation: headbob 250ms ease infinite alternate;
+            }
+
+            &:is(.left, .turnLeft) {
+                --headtilt: 1deg;
+            }
+            
+            &:is(.right, .turnRight) {
+                --headtilt: -1deg;
             }
         }
 
@@ -87,11 +119,24 @@
             border-radius: 50%;
             top: var(--y, var(--start-position-y, 1900px));
             left: var(--x, var(--start-position-x, 1000px));
-            translate: -50% -50%;
-            transform: rotateZ(calc(var(--angle, 0rad) * -1));
+            z-index: 2;
+            transform-style: preserve-3d;
+            transform: translate3d(-50%,-50%, 25px) rotateZ(calc(var(--angle, 0rad) * -1));
+
+            .fog {
+                transform-style: preserve-3d;
+                position: absolute;
+                height: calc(var(--wall-block-size) * 2 );
+                width: calc(var(--wall-block-size) * 2 * sibling-index());
+                background: oklch(from var(--main) l c h / 0.1);
+                transform: translate3d(-50%, calc(-100px - (sibling-index() * 15px)), 0) rotateX(90deg);
+                .topdown & {
+                    display: none;
+                }
+            } 
         }
 
-        .wall-block {
+        .block {
             position: absolute;
             width: var(--wall-block-size, 100px);
             height: var(--wall-block-size, 100px);
@@ -102,31 +147,44 @@
                 position: absolute;
                 width: 100%;
                 height: 100%;
-                background: var(--accent) url(wall.webp) center/cover no-repeat;
+                background: url(wall.webp) center / cover no-repeat;
+                background-clip: border-box;
                 transform-style: preserve-3d;
                 backface-visibility: hidden;
-                scale: 1.01;
-
                 translate: 0 0 var(--half-block-size);
-                
-                &.top {
+                transition: opacity 1000ms linear;
+            }
+
+            &.wall-block {
+                .top {
                     background: oklch(from var(--main) l c h / 1);
                     transform: translateZ(var(--half-block-size));
                 }
-                &.bottom {
+                .bottom {
                     transform: rotateX(180deg) translateZ(var(--half-block-size));
                 }
-                &.front {
+                .front {
                     transform: rotateX(90deg) translateZ(var(--half-block-size));
                 }
-                &.back {
+                .back {
                     transform: rotateX(-90deg) translateZ(var(--half-block-size));
                 }
-                &.left {
+                .left {
                     transform: rotateX(90deg) rotateY(-90deg) translateZ(var(--half-block-size));
                 }
-                &.right {
+                .right {
                     transform: rotateX(90deg) rotateY(90deg) translateZ(var(--half-block-size));
+                }
+
+            }
+
+            &.corridor-block {
+
+                .top {
+                    transform: rotateX(180deg) translateZ(calc(var(--half-block-size) * -1));
+                }
+                .bottom {
+                    transform: translateZ(calc(var(--half-block-size) * -1));
                 }
 
             }
@@ -139,17 +197,57 @@
             background: var(--victory);
         }
 
+        #minimap {
+            width: 200px;
+            aspect-ratio: 1;
+            display: block;
+            position: absolute;;
+            bottom: 1rem;
+            right: 1rem;
+            background: var(--main);
+
+            .minimap-block {
+                position: absolute;
+                width: 10px;
+                aspect-ratio: 1;
+                background: var(--sky);
+
+                &.position{
+                    background: var(--accent);
+                }
+                &.path {
+                    background: var(--sky);
+                }
+
+                &.spot {
+                    background: var(--victory);
+                }
+            }
+        }
+
+        #game-over-message {
+            position: fixed;
+            width: 100dvw;
+            height: 100dvh;
+            display: grid;
+            place-items: center;
+            font-size: 5rem;
+        }
+
     </style>
 </head>
 <body>
     <main id="scene">
         <div id="area">
-            <div id="cam"></div>
+            <div id="cam">
+                <div class="fog"></div>
+            </div>
             <div id="winspot"></div>
-        </div>       
+        </div>
+        <div id="minimap"></div>     
     </main>
     <template id="wall-template">
-        <div class="wall-block">
+        <div class="block wall-block">
             <div class="wall top"></div>
             <div class="wall bottom"></div>
             <div class="wall front"></div>
@@ -158,13 +256,20 @@
             <div class="wall right"></div>
         </div>
     </template>
+    <template id="corridor-template">
+        <div class="block corridor-block">
+            <div class="wall top"></div>
+            <div class="wall bottom"></div>
+        </div>
+        </div>
+    </template>
     <script>
 
         // IIFE - encapsulates logic and varibles, enables short names for commonly used global objects
         // w - window
         // d - document
 
-        ((w,d) => {
+        ((w,d,c) => {
 
             // map layout:
             // 0 - walkable space
@@ -195,16 +300,19 @@
             ];
 
             // dom elements
-
+            const scene            = d.getElementById('scene');
             const area             = d.getElementById('area');
-            const template         = d.getElementById('wall-template');
+            const wallTemplate     = d.getElementById('wall-template');
+            const corridorTemplate = d.getElementById('corridor-template');
             const winspot          = d.getElementById('winspot');
+            const cam              = d.getElementById('cam');
+            const minimap          = d.getElementById('minimap');
 
             // helper functions
             
             const getProp          = (prop,float = true) => Number[float ? 'parseFloat' : 'parseInt'](w.getComputedStyle(d.documentElement).getPropertyValue(prop));
-            const inRange          = (value, min, max) => value > min && value < max;
-            const inRadius         = (y,x, py, px, radius) => Math.hypot(px-x,py-y) <= radius;  
+            const inRange          = (value, min, max) => value >= min && value <= max;
+            const minmax           = (value, min, max) => Math.min( Math.max(min, value), max);
 
             // constants
 
@@ -217,8 +325,9 @@
             const START_POSITION_X = getProp('--start-position-x');
             const START_POSITION_Y = getProp('--start-position-y');
             const START_ANGLE      = getProp('--start-angle', true);
-            const STEP_SIZE        = 5;
-            const TURN_SPEED       = 0.05;
+            const FOG_DENSITY      = getProp('--fog-density');
+            const STEP_SIZE        = 3;
+            const TURN_SPEED       = 0.02;
 
             // variables
             
@@ -226,9 +335,13 @@
             let y                  = START_POSITION_Y;
             let angle              = START_ANGLE;
 
-            // get wall element from template
+            let start              = undefined;
+            let gameloop           = undefined;
+
+            // get walls & corridors elements from templates
             
-            const wallBlock = () => template.content.cloneNode(true).querySelector('.wall-block');
+            const wallBlock = () => wallTemplate.content.cloneNode(true).querySelector('.wall-block');
+            const corridorBlock = () => corridorTemplate.content.cloneNode(true).querySelector('.corridor-block');
 
             // validate layout - W.I.P.
             
@@ -250,34 +363,75 @@
 
             const setLayout = (y, x) => {
                 if (layout[y][x] === WALL) placeWall(y,x);
+                if (layout[y][x] === WALKABLE) placeCorridor(y,x);
                 if (layout[y][x] === WINSPOT) placeWinspot(y,x);
                 
             };
 
-            // generate and place wall block
+            // generate and place blocks
 
             const placeWall = (y, x) => { 
                 const block = wallBlock();
                 block.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
+                block.classList.add(`wall-${x}-${y}`);
                 area.appendChild(block);
+            };
+
+            const placeCorridor = (y, x) => { 
+                const block = corridorBlock();
+                block.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
+                block.classList.add(`wall-${x}-${y}`);
+                area.appendChild(block);
+
+                addToMap('path', y, x);
+
             };
 
             // place a winning spot
 
             const placeWinspot = (y,x) => {
-                winspot.style.top = `${y * WALL_SIZE}px`;
-                winspot.style.left = `${x * WALL_SIZE}px`;
+                winspot.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
+                
+                addToMap('spot', y, x);
+            }
+
+            const addToMap =(type, y,x) => {
+                const block = Object.assign(d.createElement('div'),{
+                    className: `minimap-block ${type}`,
+                })
+                block.style.transform = `translate(${x * 10}px, ${y * 10}px)`;
+                minimap.append(block);
+            }
+
+            const minimapStartPosition = () => {
+                let dx = Math.floor(START_POSITION_X / 100);
+                let dy = Math.floor(START_POSITION_Y / 100);
+
+                addToMap('position', dy, dx);
+            }
+
+            // set fog obscuring the view
+
+            const setFog = () => {
+                const fogPlane = cam.querySelector('.fog');
+                for (let i = 0; i < FOG_DENSITY; i++ ) {
+                    const fog = fogPlane.cloneNode(true);
+                    cam.append(fog);
+                } 
             }
 
             // check for collisions with walls and out of bounds area
 
             const checkCollisions = (y,x) => {
-                let dy = y - (STEP_SIZE * 2) * Math.cos(angle);
-                let dx = x - (STEP_SIZE * 2) * Math.sin(angle);
-                if (!inRange(dy, 0, MAP_SIZE ) || !inRange(dx, 0, MAP_SIZE)) return true; 
-                dy = Math.floor(dy / WALL_SIZE);
-                dx = Math.floor(dx / WALL_SIZE);
-                if (layout[dy][dx] === WALL) return true;
+                for (let a = 0; a < 4; a++ ) {
+                    let dy = y - 20 * Math.cos(angle + a * Math.PI / 2) ;
+                    let dx = x - 20 * Math.sin(angle + a * Math.PI / 2) ;
+                    if (!inRange(dy, 0, MAP_SIZE ) || !inRange(dx, 0, MAP_SIZE)) return a; 
+                    dy = Math.floor(dy / WALL_SIZE);
+                    dx = Math.floor(dx / WALL_SIZE);
+                    if (layout[dy][dx] === WALL)  return a;
+                    
+                }
                 return false;
             }
 
@@ -290,48 +444,196 @@
                 return false;
             }
 
+            // endgame
+
+            const showEndGameMessage = () => {
+                const endgamePopup = Object.assign(d.createElement('div'),{
+                    id: 'game-over-message',
+                    textContent: 'You Won!!\nClick to restart',
+                    popover: 'manual',
+                    onclick() {
+                        w.location.reload();
+                    }
+                });
+                d.body.append(endgamePopup);
+                endgamePopup.showPopover();
+            }
+
             // set movement controls and actions
 
-            const setKeybinds = e => {
-                if (['ArrowUp', 'ArrowLeft', 'ArrowRight', 'Numpad8', 'Numpad4', 'Numpad6', 'KeyW', 'KeyA', 'KeyD', 'KeyM'].includes(e.code) === false) return;
-                e.preventDefault();
-                switch (e.code) {
-                    case 'ArrowUp':
-                    case 'KeyW':
-                    case 'Numpad8':
-                        if (checkCollisions(y,x) === true) return;
-                        y -= STEP_SIZE * Math.cos(angle);
-                        x -= STEP_SIZE * Math.sin(angle);
-                        if (checkWin(y,x) === true) alert('Winner!!!');
-                        break;
-                    case 'ArrowLeft':
-                    case 'KeyA':
-                    case 'Numpad6':
-                        angle += TURN_SPEED;
-                        break;
-                    case 'ArrowRight':
-                    case 'KeyD':
-                    case 'Numpad6':    
-                        angle -= TURN_SPEED;
-                        break;
-                    case 'KeyM':
-                        area.classList.toggle('topdown');
-                        break;
-                }
+            const actions =  {
+                forward() {
+                    if (checkCollisions(y,x) === 0) return; 
+                    y -= STEP_SIZE * Math.cos(angle);
+                    x -= STEP_SIZE * Math.sin(angle);
+                },
+                backward() {
+                    if (checkCollisions(y,x) === 2) return;
+                    y += STEP_SIZE * Math.cos(angle);
+                    x += STEP_SIZE * Math.sin(angle);
+                },
+                left() {
+                    if (checkCollisions(y,x) === 1) return;
+                    y -= STEP_SIZE * Math.sin(angle) * -1;
+                    x -= STEP_SIZE * Math.cos(angle);           
+                },
+                right() {
+                    if (checkCollisions(y,x) === 3) return;
+                    y += STEP_SIZE * Math.sin(angle) * -1;
+                    x += STEP_SIZE * Math.cos(angle);
+                },
+                turnLeft() {
+                    angle += TURN_SPEED;
+                },
+                turnRight() {
+                    angle -= TURN_SPEED;
+                },
+                topdown() {
+                    area.classList.toggle('topdown');
+                }    
+            }
 
-                area.style.setProperty('--x', `${x}px`);
-                area.style.setProperty('--y', `${y}px`);
-                area.style.setProperty('--angle', `${angle}rad`);
+            const controller = {
+                ArrowUp: {
+                    pressed: false,
+                    action: actions.forward
+                }, 
+                ArrowDown: {
+                    pressed: false,
+                    action: actions.backward
+                },
+                ArrowLeft: {
+                    pressed: false,
+                    action: actions.turnLeft
+                },
+                ArrowRight: {
+                    pressed: false,
+                    action: actions.turnRight
+                },
+                Numpad8: {
+                    pressed: false,
+                    action: actions.forward
+                },
+                Numpad2: {
+                    pressed: false,
+                    action: actions.backward
+                },
+                Numpad4: {
+                    pressed: false,
+                    action: actions.turnLeft
+                },
+                Numpad6: {
+                    pressed: false,
+                    action: actions.turnRight
+                },
+                Numpad1: {
+                    pressed: false,
+                    action: actions.left
+                },
+                Numpad3: {
+                    pressed: false,
+                    action: actions.right
+                },
+                KeyW: {
+                    pressed: false,
+                    action: actions.forward
+                },
+                KeyS: {
+                    pressed: false,
+                    action: actions.backward
+                },
+                KeyA: {
+                    pressed: false,
+                    action: actions.turnLeft
+                },
+                KeyD: {
+                    pressed: false,
+                    action: actions.turnRight
+                },
+                KeyQ: {
+                    pressed: false,
+                    action: actions.left
+                },
+                KeyE: {
+                    pressed: false,
+                    action: actions.right
+                },
+                KeyM: {
+                    
+                }
+            }  
+
+            const keys = Object.keys(controller);
+
+            const handleKeys = e => {
+                if (!keys.includes(e.code)) return;
+                e.preventDefault();
+                if (e.code === 'KeyM' && e.type === 'keydown') {
+                    actions.topdown();
+                    return;
+                } 
+                if (e.type === 'keydown') controller[e.code].pressed = true;
+                if (e.type === 'keyup') controller[e.code].pressed = false;
+                area.classList.toggle(controller[e.code].action.name, e.type ==='keydown' );
 
             }
 
-            // validate layout, set the map and listeners
+            // loop
+            
+            const loop = (timestamp) => {
+
+                // check for win condition
+
+
+                if (start === undefined) start = timestamp;
+
+                let delta = timestamp - start;
+
+                // time based animation frames
+
+                if (delta >= 16.67 ) {
+
+                    // handle key actions
+
+                    for (let key in controller) {
+                        if (controller[key].pressed === true) controller[key].action();
+                    }
+
+                    // update position on minimap
+
+                    let px = Math.floor(x / 100);
+                    let py = Math.floor(y / 100);
+                    d.querySelector('#minimap .position').style.transform = `translate(${px*10}px, ${py*10}px)`;
+
+                    // update css variables
+                
+                    scene.style.setProperty('--x', `${x}px`);
+                    scene.style.setProperty('--y', `${y}px`);
+                    scene.style.setProperty('--angle', `${angle}rad`);
+                    scene.style.setProperty('--skybox', `${angle*1000}px`);
+
+                    start = timestamp;
+                }
+                    
+                if (checkWin(y,x) === true) {
+                    w.cancelAnimationFrame(gameloop);
+                    showEndGameMessage();
+                    
+                } else {
+                    gameloop = w.requestAnimationFrame(loop);
+                }
+            }
+            
+            // validate layout, set the map environment, listeners and start gameloop
 
             if (!validateLayout()) throw new Error('errors in layout');
             parseLayout(setLayout);
-            w.addEventListener('keydown', setKeybinds );
+            minimapStartPosition();
+            setFog();
+            ['keydown', 'keyup'].forEach(type=> w.addEventListener(type, handleKeys ));
+            gameloop = w.requestAnimationFrame(loop);
 
-        })(window, document);
+        })(window, document,console);
     </script>
 </body>
 </html>
