@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preload" href="wall.webp" as="image" type="image/webp">
+    <link rel="preload" href="floor.webp" as="image" type="image/webp">
     <link rel="preload" href="skybox.webp" as="image" type="image/webp">
     <title>3D Labyrynth - a Pure HTML, CSS & Vanilla JS Game/3D world Proof of Concept</title>
     <meta name="description" content="Walkable 3D Labirynth made entirely with HTML, CSS, and Vanilla JS. No use of canvas or any external animation or 3D graphic libraries. Only DIVs and CSS 3d transforms. Proof of Concept. WIP.">
     <style>
         :root {
+            /* colors */
             --main: oklch( from rgb(0 0 0 / 0.7) l c h );
             --background: oklch(from var(--main) l c h  / 0.3);
             --accent: oklch(from rgb(255 0 0 / 1) calc(l * 1.3) c h ) ;
@@ -17,16 +19,28 @@
             --grass: oklch(from rgb(0 255 0 / 1) calc(l * 0.8) c calc(h * 1.1) );
             --victory: oklch(from rgb(255 255 0/1) l c h );
 
+            /* textures */
+            --wall-texture: url(wall.webp) center / cover no-repeat;
+            --floor-texture: url(floor.webp) center / cover no-repeat;
+            --skybox-position: 0px;
+            --skybox-texture: url(skybox.webp) var(--skybox-position, 0px) 100%/ auto 175% repeat-x;
+
+             /* 3D perspective */
             --perspective: 1000px;
 
+            /* dimensions */
             --map-size: 2000px;
             --wall-block-size: 100px;
 
+            /* player starting positions */
             --start-position-x: 1000px;
             --start-position-y: 1900px;
             --start-angle: 0rad;
 
-            --fog-density: 100;
+            /* other config settings */
+            --step-size: 3;
+            --turn-speed: 0.02;
+            --fog-density: 50;
 
         }
         *, *::before, *::after {
@@ -58,10 +72,14 @@
             display: block;
             width: 100%;
             height: 100%;
-            background: url(skybox.webp) var(--skybox, 0px) 100%/ auto 175% repeat-x;
+            background: var(--skybox-texture);
             perspective: var(--perspective, 1000px);
             overflow:hidden;
             position:relative;
+
+            &:has(.topdown) {
+                background: var(--background);
+            }
 
         }
 
@@ -83,7 +101,6 @@
         #area {
             width: var(--map-size, 2000px);
             height: var(--map-size, 2000px);
-            /* background: var(--grass); */
 
             position:absolute;
             top: 50%;
@@ -102,11 +119,11 @@
                 animation: headbob 250ms ease infinite alternate;
             }
 
-            &:is(.left, .turnLeft) {
+            &:is(.left) {
                 --headtilt: 1deg;
             }
             
-            &:is(.right, .turnRight) {
+            &:is(.right) {
                 --headtilt: -1deg;
             }
         }
@@ -130,6 +147,8 @@
                 width: calc(var(--wall-block-size) * 2 * sibling-index());
                 background: oklch(from var(--main) l c h / 0.1);
                 transform: translate3d(-50%, calc(-100px - (sibling-index() * 15px)), 0) rotateX(90deg);
+                transition: opacity 500ms linear;
+
                 .topdown & {
                     display: none;
                 }
@@ -147,15 +166,18 @@
                 position: absolute;
                 width: 100%;
                 height: 100%;
-                background: url(wall.webp) center / cover no-repeat;
                 background-clip: border-box;
                 transform-style: preserve-3d;
                 backface-visibility: hidden;
                 translate: 0 0 var(--half-block-size);
-                transition: opacity 1000ms linear;
             }
 
             &.wall-block {
+                
+                .wall {
+                    background: var(--wall-texture);
+                }
+
                 .top {
                     background: oklch(from var(--main) l c h / 1);
                     transform: translateZ(var(--half-block-size));
@@ -180,21 +202,43 @@
 
             &.corridor-block {
 
+                .wall {
+                    background: var(--wall-texture);
+                }
+
                 .top {
                     transform: rotateX(180deg) translateZ(calc(var(--half-block-size) * -1));
                 }
                 .bottom {
-                    transform: translateZ(calc(var(--half-block-size) * -1));
+                    background: var(--floor-texture);
+                    transform: translateZ(calc(var(--half-block-size) * -1));   
                 }
 
             }
-        }
 
-        #winspot {
-            position: absolute;
-            width: var(--wall-block-size, 100px);
-            height: var(--wall-block-size, 100px);
-            background: var(--victory);
+            &.winspot-block {
+                .wall {
+                    background: linear-gradient(to bottom,  oklch( from rgb(255 255 255 / 0.5) l c h ) 5%, transparent 15%, transparent 75px, var(--victory) 75px);
+                    backface-visibility: visible;
+                    filter: brightness(1.5);
+                };
+                .bottom {
+                    background: var(--victory);
+                    transform: translateZ(calc(25px * -1));
+                }
+                .front {
+                    transform: rotateX(90deg) translateZ(var(--half-block-size)) rotateZ(180deg);
+                }
+                .back {
+                    transform: rotateX(-90deg) translateZ(var(--half-block-size));
+                }
+                .left {
+                    transform: rotateX(90deg) rotateY(-90deg) translateZ(var(--half-block-size)) rotateZ(180deg);
+                }
+                .right {
+                    transform: rotateX(90deg) rotateY(90deg) translateZ(var(--half-block-size)) rotateZ(180deg);
+                }
+            }
         }
 
         #minimap {
@@ -225,27 +269,97 @@
             }
         }
 
+        #controls-layout {
+            position: fixed;
+            width: 100dvw;
+            height: 100dvh;
+            color: oklch( from rgb(255 255 255 / 1) l c h );
+            background: var(--background);
+            border:none;
+            font-size: 3dvh;
+            padding: 3rem;
+            text-wrap: pretty;
+
+            ul {
+                margin-inline-start: 2rem;
+            }
+
+            p {
+                margin-block-start: 2rem;
+                text-align: center;
+            }
+        }
+
+        #welcome-screen,
         #game-over-message {
             position: fixed;
             width: 100dvw;
             height: 100dvh;
+            border: none;
             display: grid;
             place-items: center;
-            font-size: 5rem;
+            font-size: 5dvh;
+            text-align: center;
+            text-wrap: pretty;
+
+
+            p {
+                width: 80dvw;
+                font-size: 2rem;
+
+                &.warning {
+                    color: var(--accent); 
+                }
+            }
+
+            button {
+                font-size: 3rem;
+                padding: 0.5em 1em;
+            }
         }
 
     </style>
 </head>
-<body>
-    <main id="scene">
+<body id="game">
+    <!-- Welcome screen with game starting button -->
+    <div id="welcome-screen" popover>
+        <h1>3D Labyrinth prototype</h1>
+        <p>Made entirely with <strong>HTML</strong>, <strong>CSS</strong>, and <strong>Vanilla JS</strong>. No use of canvas or any external animation or 3D graphic libraries. Only DIVs and CSS 3D transforms. This is Proof of Concept and Work in Progress.</p>
+        <p>Created by a gamer, but not a game developer :) Result has the vibes of old games from the 90's. Right angles only :) And not optimised performance-wise</p>
+        <p class="warning">This prototype uses many modern HTML, CSS and JS features, which, at the moment of creating it, were not Baseline and may not work on all browsers!</p>
+        <button type="button" id="start-game" command="--start-game" commandfor="game">Start game</button>
+    </div>
+    <!-- main gameworld viewport -->
+    <main id="scene" tabindex="-1">
+        <!-- controls description popover necessary to induce first click from player and request pointer lock -->
+        <div id="controls-layout" popover="manual">
+            <h2>How to play</h2>
+            <p>Just walk around and enjoy :) To finish, walk into the yellow glowing spot in the labyrinth's centre.</p>
+            <h2>Controls</h2>
+            <ul>
+                <li><b>Up Arrow</b> / <b>W</b> / <b>Numpad 8</b> - move forward</li>
+                <li><b>Down Arrow</b> / <b>S</b> / <b>Numpad 2</b> - move back</li>
+                <li><b>Left Arrow</b> / <b>A</b> / <b>Numpad 4</b> or <b>Mouse</b> - turn left</li>
+                <li><b>Right Arrow</b> / <b>D</b> / <b>Numpad 6</b> or <b>Mouse</b> - turn right</li>
+                <li><b>Q</b> / <b>Numpad 1</b> - strafe left</li>
+                <li><b>E</b> / <b>Numpad 3</b> - strafe right</li>
+                <li><b>M</b> - toggle between First Person / Top-down view</li>
+            </ul>
+            <p>click to continue</p>
+        </div>
+        <!-- generated walkable 3d area -->
         <div id="area">
+            <!-- player marker for top down view and hook for fog -->
             <div id="cam">
+                <!-- semi-transparent fog filter displayed in front of player's viewport and multiplied based on --fog-density variable to create
+                 atmospheric fog / distant darkness effect -->
                 <div class="fog"></div>
             </div>
-            <div id="winspot"></div>
         </div>
+        <!-- container for generated minimap -->
         <div id="minimap"></div>     
     </main>
+    <!-- templates for varoius blocktypes -->
     <template id="wall-template">
         <div class="block wall-block">
             <div class="wall top"></div>
@@ -261,21 +375,28 @@
             <div class="wall top"></div>
             <div class="wall bottom"></div>
         </div>
+    </template>
+    <template id="winspot-template">
+        <div class="block winspot-block">
+            <div class="wall bottom"></div>
+            <div class="wall front"></div>
+            <div class="wall back"></div>
+            <div class="wall left"></div>
+            <div class="wall right"></div>
         </div>
     </template>
     <script>
+        "use strict";
 
-        // IIFE - encapsulates logic and varibles, enables short names for commonly used global objects
+        // IIFE - encapsulates logic and variables, enables short names for commonly used global objects
         // w - window
         // d - document
-
         ((w,d,c) => {
 
             // map layout:
             // 0 - walkable space
             // 1 - wall
             // 2 - win spot
-
             const layout = [
                 [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
                 [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
@@ -287,9 +408,9 @@
                 [1,1,1,0,1,1,1,0,1,1,0,1,1,0,0,0,0,1,0,1],
                 [1,0,0,0,0,0,1,0,1,0,0,0,1,0,1,1,1,1,0,1],
                 [1,0,0,0,1,0,0,0,0,0,2,0,0,0,1,0,0,0,0,1],
-                [1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,1],
-                [1,0,0,0,0,0,1,0,1,0,0,0,1,0,1,0,1,1,1,1],
-                [1,0,0,0,0,0,1,0,1,1,0,0,0,0,1,0,0,0,0,1],
+                [1,0,0,0,0,0,1,0,1,0,0,0,1,0,0,0,0,0,0,1],
+                [1,0,0,0,0,0,1,0,1,1,0,1,1,0,1,0,1,1,1,1],
+                [1,0,0,0,0,0,1,0,1,1,0,1,0,0,1,0,0,0,0,1],
                 [1,1,1,0,1,1,1,0,0,0,0,0,0,1,1,1,0,1,1,1],
                 [1,0,0,0,0,0,1,1,1,1,1,0,1,1,0,0,0,0,0,1],
                 [1,1,1,0,1,0,0,0,1,0,0,0,0,1,0,1,1,1,0,1],
@@ -300,57 +421,97 @@
             ];
 
             // dom elements
-            const scene            = d.getElementById('scene');
-            const area             = d.getElementById('area');
-            const wallTemplate     = d.getElementById('wall-template');
-            const corridorTemplate = d.getElementById('corridor-template');
-            const winspot          = d.getElementById('winspot');
-            const cam              = d.getElementById('cam');
-            const minimap          = d.getElementById('minimap');
+            const DOM = Object.freeze({
+                root             : d.documentElement,
+                game             : d.body,
+                mainMenu         : d.getElementById('welcome-screen'),
+                startGame        : d.getElementById('start-game'),
+                scene            : d.getElementById('scene'),
+                area             : d.getElementById('area'),
+                cam              : d.getElementById('cam'),
+                minimap          : d.getElementById('minimap'),
+                controls         : d.getElementById('controls-layout'),
+                wallTemplate     : d.getElementById('wall-template'),
+                corridorTemplate : d.getElementById('corridor-template'),
+                winspotTemplate  : d.getElementById('winspot-template'),
+            });
 
             // helper functions
+            const Utils = Object.freeze({
+                createElement    : (nodeName, propsObject = {}) => Object.assign(d.createElement(nodeName), propsObject),
+                getProp          : (prop,float = true) => Number[float ? 'parseFloat' : 'parseInt'](w.getComputedStyle(DOM.root).getPropertyValue(prop)),
+                fromTemplate     : (templateEl, elSelector) => templateEl.content.cloneNode(true).querySelector(elSelector), 
+                inRange          : (value, min, max) => value >= min && value < max,
+                minmax           : (value, min, max) => Math.min( Math.max(min, value), max),
+                toLayoutCoord    : value => Math.floor(value / Config.WALL_SIZE),
+                objForEach       : (obj,callback) => [...Object.entries(obj)].forEach(([key,val]) => callback(val,key)), 
+            });
             
-            const getProp          = (prop,float = true) => Number[float ? 'parseFloat' : 'parseInt'](w.getComputedStyle(d.documentElement).getPropertyValue(prop));
-            const inRange          = (value, min, max) => value >= min && value <= max;
-            const minmax           = (value, min, max) => Math.min( Math.max(min, value), max);
+            // constants - block types
+            const Blocktypes = Object.freeze({
+                WALKABLE         : 0,
+                WALL             : 1,
+                WINSPOT          : 2,
+            });
 
-            // constants
+            // constants - configurable options
+            const Config = Object.freeze({
+                MAP_SIZE         : Utils.getProp('--map-size'),
+                WALL_SIZE        : Utils.getProp('--wall-block-size'),
+                START_POSITION_X : Utils.getProp('--start-position-x'),
+                START_POSITION_Y : Utils.getProp('--start-position-y'),
+                START_ANGLE      : Utils.getProp('--start-angle', true),
+                FOG_DENSITY      : Utils.getProp('--fog-density'),
+                STEP_SIZE        : Utils.getProp('--step-size'),
+                TURN_SPEED       : Utils.getProp('--turn-speed'),
+            });
 
-            const WALKABLE         = 0;
-            const WALL             = 1;
-            const WINSPOT          = 2;
-            
-            const MAP_SIZE         = getProp('--map-size');
-            const WALL_SIZE        = getProp('--wall-block-size');
-            const START_POSITION_X = getProp('--start-position-x');
-            const START_POSITION_Y = getProp('--start-position-y');
-            const START_ANGLE      = getProp('--start-angle', true);
-            const FOG_DENSITY      = getProp('--fog-density');
-            const STEP_SIZE        = 3;
-            const TURN_SPEED       = 0.02;
-
-            // variables
-            
-            let x                  = START_POSITION_X;
-            let y                  = START_POSITION_Y;
-            let angle              = START_ANGLE;
-
-            let start              = undefined;
-            let gameloop           = undefined;
-
-            // get walls & corridors elements from templates
-            
-            const wallBlock = () => wallTemplate.content.cloneNode(true).querySelector('.wall-block');
-            const corridorBlock = () => corridorTemplate.content.cloneNode(true).querySelector('.corridor-block');
-
-            // validate layout - W.I.P.
-            
-            const validateLayout = () => {
-                return layout.length === 20 && layout.every(row => row.length === 20 );
+            // Player position
+            const Player = {
+                get FRONT()      { return 0; },
+                get BACK()       { return 2; },
+                get LEFT()       { return 1; },
+                get RIGHT()      { return 3; },
+                x                : Config.START_POSITION_X,
+                y                : Config.START_POSITION_Y,
+                angle            : Config.START_ANGLE,
             }
 
-            // go through each layout cell and execute specified callback on it
+            // mouse coordinates
+            const Mouse = {
+                currentX         : 0,
+                previusX         : 0,
+            }
 
+            //game state
+            const GameState = {
+                started          : false,
+                isWon            : false,
+            }
+
+            // variables not defined at startup
+            let position         = undefined;
+            let start            = undefined;
+            let gameloop         = undefined;
+            let winspotx         = undefined;
+            let winspoty         = undefined;
+
+
+            // sturucture getter functions - for use in placeStructure() function - create one for every block used in layout;
+            const wallBlock      = () => Utils.fromTemplate(DOM.wallTemplate, '.wall-block');
+            const corridorBlock  = () => Utils.fromTemplate(DOM.corridorTemplate, '.corridor-block');
+            const winspotBlock   = () => Utils.fromTemplate(DOM.winspotTemplate, '.winspot-block');
+
+            // validate layout - used for validation of layout correctness before game start - W.I.P
+            const validateLayout = () => {
+                const hasEqualDimensions   = num => layout.length === num && layout.every(row => row.length === num );
+                const hasAllowedBlocktypes = layout.every(y => y.every(value => [...Object.values(Blocktypes)].includes(value))); 
+                const hasWinspot           = layout.some(x => x.some(y => y === Blocktypes.WINSPOT ))
+                return hasEqualDimensions(20) && hasAllowedBlocktypes && hasWinspot;
+            }
+
+            // go through each layout cell and execute specified callback on it - used for mainly generating world and minimap,
+            // maybe? used in gameloop for other reasons 
             const parseLayout = callback => {
                 for (let y = 0; y < layout.length; y++) {
                     for (let x = 0; x < layout[y].length; x++) {
@@ -359,141 +520,150 @@
                 }
             };
 
-            // place specific structure basedon layout cell value
+            // function to generate specific block placing functions from structure getters.
+            const placeStructure = (structureGetterCallback, y, x, minimapClassName = undefined) => {
+                const block = structureGetterCallback();
+                block.style.transform = `translate3d(${x * Config.WALL_SIZE}px, ${y * Config.WALL_SIZE}px, 0)`;
+                block.classList.add(`wall-${x}-${y}`);
+                DOM.area.appendChild(block);
+                if (minimapClassName) addToMap(minimapClassName, y, x);
+            }
 
+            // generate specific block placing functions with previously created structure getters
+            const placeWall     = (y, x) => placeStructure(wallBlock, y, x);
+            const placeCorridor = (y, x) => placeStructure(corridorBlock, y, x, 'path')
+            const placeWinspot  = (y, x) => placeStructure(winspotBlock, y, x, 'spot')
+
+            // place specific block based on layout cell value, in case of winspot assign it coordinates in separate variables for use in gameloop
             const setLayout = (y, x) => {
-                if (layout[y][x] === WALL) placeWall(y,x);
-                if (layout[y][x] === WALKABLE) placeCorridor(y,x);
-                if (layout[y][x] === WINSPOT) placeWinspot(y,x);
-                
+                if (layout[y][x] === Blocktypes.WALL) placeWall(y,x);
+                if (layout[y][x] === Blocktypes.WALKABLE) placeCorridor(y,x);
+                if (layout[y][x] === Blocktypes.WINSPOT) {
+                    placeWinspot(y,x);
+                    [winspotx,winspoty] = [x,y];
+                }
             };
 
-            // generate and place blocks
-
-            const placeWall = (y, x) => { 
-                const block = wallBlock();
-                block.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
-                block.classList.add(`wall-${x}-${y}`);
-                area.appendChild(block);
-            };
-
-            const placeCorridor = (y, x) => { 
-                const block = corridorBlock();
-                block.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
-                block.classList.add(`wall-${x}-${y}`);
-                area.appendChild(block);
-
-                addToMap('path', y, x);
-
-            };
-
-            // place a winning spot
-
-            const placeWinspot = (y,x) => {
-                winspot.style.transform = `translate3d(${x * WALL_SIZE}px, ${y * WALL_SIZE}px, 0)`;
-                
-                addToMap('spot', y, x);
-            }
-
-            const addToMap =(type, y,x) => {
-                const block = Object.assign(d.createElement('div'),{
+            // function to generate parts of minimap layout and return generated part if necessary
+            const addToMap = (type, y,x, returnBlock = false) => {
+                const block = Utils.createElement('div',{
                     className: `minimap-block ${type}`,
-                })
+                });
                 block.style.transform = `translate(${x * 10}px, ${y * 10}px)`;
-                minimap.append(block);
+                DOM.minimap.append(block);
+                if (returnBlock === true) return block;
             }
 
+            // mark player position on minimap, assign the marker element to variable used later in gameloop to update it 
             const minimapStartPosition = () => {
-                let dx = Math.floor(START_POSITION_X / 100);
-                let dy = Math.floor(START_POSITION_Y / 100);
+                let dx = Utils.toLayoutCoord(Config.START_POSITION_X);
+                let dy = Utils.toLayoutCoord(Config.START_POSITION_Y);
 
-                addToMap('position', dy, dx);
+                position = addToMap('position', dy, dx, true); 
             }
 
-            // set fog obscuring the view
-
+            // set fog obscuring the view to create effect of distant darkness
             const setFog = () => {
-                const fogPlane = cam.querySelector('.fog');
-                for (let i = 0; i < FOG_DENSITY; i++ ) {
+                const fogPlane = DOM.cam.querySelector('.fog');
+                for (let i = 0; i < Config.FOG_DENSITY; i++ ) {
                     const fog = fogPlane.cloneNode(true);
-                    cam.append(fog);
+                    DOM.cam.append(fog);
                 } 
             }
 
             // check for collisions with walls and out of bounds area
-
             const checkCollisions = (y,x) => {
+                let currentCollisions = [];
                 for (let a = 0; a < 4; a++ ) {
-                    let dy = y - 20 * Math.cos(angle + a * Math.PI / 2) ;
-                    let dx = x - 20 * Math.sin(angle + a * Math.PI / 2) ;
-                    if (!inRange(dy, 0, MAP_SIZE ) || !inRange(dx, 0, MAP_SIZE)) return a; 
-                    dy = Math.floor(dy / WALL_SIZE);
-                    dx = Math.floor(dx / WALL_SIZE);
-                    if (layout[dy][dx] === WALL)  return a;
+                    let dy = y - 20 * Math.cos(Player.angle + a * Math.PI / 2) ;
+                    let dx = x - 20 * Math.sin(Player.angle + a * Math.PI / 2) ;
+                    if (!Utils.inRange(dy, 0, Config.MAP_SIZE ) || !Utils.inRange(dx, 0, Config.MAP_SIZE)) {
+                        currentCollisions.push(a); 
+                        continue;
+                    }
+                    dy = Utils.toLayoutCoord(dy);
+                    dx = Utils.toLayoutCoord(dx);
+                    if (layout[dy][dx] === Blocktypes.WALL)  currentCollisions.push(a);
                     
                 }
+                if (currentCollisions.length > 0) return currentCollisions;
                 return false;
             }
+
+            //check if collision occurs from specific player side
+            const isColliding = (side,y,x) => {
+                let collisions = checkCollisions(y,x);
+                return Array.isArray(collisions) && collisions.includes(side);
+            } 
 
             // check if winning spot was stepped on
-
             const checkWin = (y,x) => {
-                y = Math.floor(y / WALL_SIZE);
-                x = Math.floor(x / WALL_SIZE);
-                if (layout[y][x] === WINSPOT) return true;
+                y = Utils.toLayoutCoord(y);
+                x = Utils.toLayoutCoord(x);
+                if (layout[y][x] === Blocktypes.WINSPOT) return true;
                 return false;
             }
 
-            // endgame
+            // main menu / welcome screen 
+            const showMainMenu = (activeGame = false) => {
+                DOM.mainMenu.querySelector('button').textContent = activeGame ? 'Continue' : 'Start Game';
+                DOM.mainMenu.showPopover();
+            }
+            const hideMainMenu = () => DOM.mainMenu.hidePopover();
 
+            // endgame / win screen - W.I.P - in future may? have different outcomes based on player actions
             const showEndGameMessage = () => {
-                const endgamePopup = Object.assign(d.createElement('div'),{
+                const endgamePopup = Utils.createElement('div',{
                     id: 'game-over-message',
-                    textContent: 'You Won!!\nClick to restart',
+                    textContent: 'You Won!! Click to restart',
                     popover: 'manual',
                     onclick() {
                         w.location.reload();
                     }
                 });
-                d.body.append(endgamePopup);
+                GameState.started = false;
+                DOM.game.append(endgamePopup);
                 endgamePopup.showPopover();
             }
 
             // set movement controls and actions
-
             const actions =  {
                 forward() {
-                    if (checkCollisions(y,x) === 0) return; 
-                    y -= STEP_SIZE * Math.cos(angle);
-                    x -= STEP_SIZE * Math.sin(angle);
+                    if (isColliding(Player.FRONT, Player.y, Player.x)) return;
+                    Player.y -= Config.STEP_SIZE * Math.cos(Player.angle);
+                    Player.x -= Config.STEP_SIZE * Math.sin(Player.angle);
                 },
                 backward() {
-                    if (checkCollisions(y,x) === 2) return;
-                    y += STEP_SIZE * Math.cos(angle);
-                    x += STEP_SIZE * Math.sin(angle);
+                    if (isColliding(Player.BACK, Player.y, Player.x)) return;
+                    Player.y += Config.STEP_SIZE * Math.cos(Player.angle);
+                    Player.x += Config.STEP_SIZE * Math.sin(Player.angle);
                 },
                 left() {
-                    if (checkCollisions(y,x) === 1) return;
-                    y -= STEP_SIZE * Math.sin(angle) * -1;
-                    x -= STEP_SIZE * Math.cos(angle);           
+                    if (isColliding(Player.LEFT, Player.y, Player.x)) return;
+                    Player.y -= Config.STEP_SIZE * Math.sin(Player.angle) * -1;
+                    Player.x -= Config.STEP_SIZE * Math.cos(Player.angle);           
                 },
                 right() {
-                    if (checkCollisions(y,x) === 3) return;
-                    y += STEP_SIZE * Math.sin(angle) * -1;
-                    x += STEP_SIZE * Math.cos(angle);
+                    if (isColliding(Player.RIGHT, Player.y,Player.x)) return;
+                    Player.y += Config.STEP_SIZE * Math.sin(Player.angle) * -1;
+                    Player.x += Config.STEP_SIZE * Math.cos(Player.angle);
                 },
                 turnLeft() {
-                    angle += TURN_SPEED;
+                    Player.angle +=  Config.TURN_SPEED;
                 },
                 turnRight() {
-                    angle -= TURN_SPEED;
+                    Player.angle -=  Config.TURN_SPEED;
+                },
+                mouseTurn(mouseX) {
+                    Player.angle -= mouseX;
                 },
                 topdown() {
-                    area.classList.toggle('topdown');
+                    DOM.area.classList.toggle('topdown');
                 }    
             }
 
-            const controller = {
+            // assign keycodes to state and actions
+            const controller = Object.freeze({
                 ArrowUp: {
                     pressed: false,
                     action: actions.forward
@@ -557,81 +727,132 @@
                 KeyE: {
                     pressed: false,
                     action: actions.right
-                },
-                KeyM: {
-                    
                 }
-            }  
+            });
 
+            // event handler for keypresses
             const keys = Object.keys(controller);
-
             const handleKeys = e => {
+                if (e.code === 'KeyM') {
+                    e.preventDefault();
+                    if (e.type === 'keydown' && !e.repeat) actions.topdown();
+                    return;
+                }
                 if (!keys.includes(e.code)) return;
                 e.preventDefault();
-                if (e.code === 'KeyM' && e.type === 'keydown') {
-                    actions.topdown();
-                    return;
-                } 
                 if (e.type === 'keydown') controller[e.code].pressed = true;
                 if (e.type === 'keyup') controller[e.code].pressed = false;
-                area.classList.toggle(controller[e.code].action.name, e.type ==='keydown' );
+                DOM.area.classList.toggle(controller[e.code].action.name, e.type ==='keydown' && checkCollisions(Player.y,Player.x) === false );
 
             }
 
-            // loop
-            
+            // event handler for mouse movement
+            const handleMouse = e =>  {
+                Mouse.currentX = e.movementX;
+            }
+
+            // game loop
             const loop = (timestamp) => {
-
-                // check for win condition
-
 
                 if (start === undefined) start = timestamp;
 
                 let delta = timestamp - start;
 
-                // time based animation frames
-
+                // updates frame after obout 16ms (60 times per second) to crete almost consistent 60 FPS gameplay 
                 if (delta >= 16.67 ) {
 
                     // handle key actions
-
                     for (let key in controller) {
                         if (controller[key].pressed === true) controller[key].action();
                     }
 
-                    // update position on minimap
+                    //handle mouse turning
+                    if (Mouse.previusX !== Mouse.currentX) actions.mouseTurn(Mouse.currentX * Config.TURN_SPEED);
+                    Mouse.previusX = Mouse.currentX;
 
-                    let px = Math.floor(x / 100);
-                    let py = Math.floor(y / 100);
-                    d.querySelector('#minimap .position').style.transform = `translate(${px*10}px, ${py*10}px)`;
 
-                    // update css variables
-                
-                    scene.style.setProperty('--x', `${x}px`);
-                    scene.style.setProperty('--y', `${y}px`);
-                    scene.style.setProperty('--angle', `${angle}rad`);
-                    scene.style.setProperty('--skybox', `${angle*1000}px`);
+                    // update player position on minimap
+                    let px = Utils.toLayoutCoord(Player.x);
+                    let py = Utils.toLayoutCoord(Player.y);
+                    position.style.transform = `translate(${px*10}px, ${py*10}px)`;  
+                   
+                    // update css variables - move world around the player :)
+                    DOM.scene.style.setProperty('--x', `${Player.x}px`);
+                    DOM.scene.style.setProperty('--y', `${Player.y}px`);
+                    DOM.scene.style.setProperty('--angle', `${Player.angle}rad`);
+                    DOM.root.style.setProperty('--skybox-position', `${Player.angle*1500}px`);
 
                     start = timestamp;
                 }
-                    
-                if (checkWin(y,x) === true) {
-                    w.cancelAnimationFrame(gameloop);
-                    showEndGameMessage();
-                    
+
+                // check for win condition   
+                if (checkWin(Player.y,Player.x) === true) {
+                    GameState.isWon = true;
+                    d.exitFullscreen();
                 } else {
                     gameloop = w.requestAnimationFrame(loop);
                 }
             }
-            
-            // validate layout, set the map environment, listeners and start gameloop
 
-            if (!validateLayout()) throw new Error('errors in layout');
-            parseLayout(setLayout);
-            minimapStartPosition();
-            setFog();
-            ['keydown', 'keyup'].forEach(type=> w.addEventListener(type, handleKeys ));
-            gameloop = w.requestAnimationFrame(loop);
+            // handler for fullscreen change
+            const handleFullscreen = e => {
+                if (d.fullscreenElement === DOM.scene) {
+                    DOM.scene.focus();
+                    DOM.controls.showPopover();
+                    enableControls();
+                    gameloop = w.requestAnimationFrame(loop);
+                }
+                else {
+                    w.cancelAnimationFrame(gameloop);
+                    disableControls();
+                    if (GameState.isWon === true) showEndGameMessage();
+                    else showMainMenu(GameState.started);
+                }
+            }
+            
+            // handler for game commands (using JS Invoker Commands API)
+            const handleGameCommands = ({command}) => {
+                if (command === '--start-game') {
+                    hideMainMenu();
+                    if (!GameState.started) GameState.started = true;
+                    DOM.scene.requestFullscreen();
+                }
+            };
+
+            // hide controls popup enable controls after first click in fullscreen ( necessary for working pointer lock) 
+            const enableControls = () => {
+                DOM.scene.addEventListener('click', async () => {
+                    DOM.controls.hidePopover();
+                    ['keydown', 'keyup'].forEach(type=> DOM.scene.addEventListener(type, handleKeys));
+                    await DOM.scene.requestPointerLock({
+                        unadjustedMovement: true,
+                    });
+                    DOM.scene.addEventListener('mousemove', handleMouse);
+                });
+            }
+
+            // disable controls after exiting fullscreen
+            const disableControls = () => {
+                ['keydown', 'keyup'].forEach(type=> DOM.scene.removeEventListener(type, handleKeys));
+                d.exitPointerLock();
+                DOM.scene.removeEventListener('mousemove', handleMouse);
+            }
+
+            // wrap it all up...
+            const initGame = () => {
+                if (!validateLayout()) throw new Error('errors in layout');
+                DOM.game.addEventListener('command', handleGameCommands);
+                DOM.scene.addEventListener('fullscreenchange', handleFullscreen);
+                parseLayout(setLayout);
+                minimapStartPosition();
+                setFog();
+                showMainMenu();
+            }
+
+            // .. and when everything is ready...
+            initGame();
+            
+            // Happy playing :) 
 
         })(window, document,console);
     </script>

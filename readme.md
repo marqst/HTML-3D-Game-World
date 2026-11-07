@@ -9,9 +9,9 @@ Vibes of old 3D games from the '90s.
 ## Controls
 
 - **Up Arrow** / **W** / **Numpad 8** - move forward
-- **Down Arrow** / **S** / **Numpad 2** - move back
-- **Left Arrow** / **A** / **Numpad 4** - turn left
-- **Right Arrow** / **D** / **Numpad 6** - turn right
+- **Down Arrow** / **S** / **Numpad 2**- move back
+- **Left Arrow** / **A** / **Numpad 4** or **Mouse**  - turn left
+- **Right Arrow** / **D** / **Numpad 6** or **Mouse**  - turn right
 - **Q** / **Numpad 1** - strafe left
 - **E** / **Numpad 3** - strafe right
 - **M** - toggle between First Person / Top-down view
