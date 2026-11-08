@@ -42,6 +42,7 @@
             --turn-speed: 0.02;
             --fog-density: 30;
             --fog-distance: 100px;
+            --fog-opacity: 1;
 
         }
         *, *::before, *::after {
@@ -149,7 +150,8 @@
                 width: calc(var(--wall-block-size) * 3 * sibling-index());
                 background: oklch(from var(--main) l c h / 0.1);
                 transform: translate3d(-50%, calc((var(--fog-distance) * -1) - (sibling-index() * 10px)), 0) rotateX(90deg);
-                transition: transform 500ms linear;
+                opacity: var(--fog-opacity);
+                transition: all 500ms ease;
 
                 .topdown & {
                     display: none;
@@ -830,9 +832,8 @@
                         while (obstacle === false) {
                             let dy = Player.y - point * Math.cos(Player.angle) ;
                             let dx = Player.x - point * Math.sin(Player.angle) ;
-                            if (!Utils.inRange(dy, 0, Config.MAP_SIZE ) || !Utils.inRange(dx, 0, Config.MAP_SIZE)) {
-                                break;
-                            };
+                            DOM.scene.style.setProperty('--fog-opacity', !Utils.inRange(dy, 0, Config.MAP_SIZE ) || !Utils.inRange(dx, 0, Config.MAP_SIZE) ? 0 : 1);
+                            if (!Utils.inRange(dy, 0, Config.MAP_SIZE ) || !Utils.inRange(dx, 0, Config.MAP_SIZE)) break;
                             dy = Utils.toLayoutCoord(dy);
                             dx = Utils.toLayoutCoord(dx);
                             if (layout[dy][dx] === Blocktypes.WALKABLE)  {
