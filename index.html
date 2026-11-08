@@ -40,7 +40,8 @@
             /* other config settings */
             --step-size: 3;
             --turn-speed: 0.02;
-            --fog-density: 50;
+            --fog-density: 30;
+            --fog-distance: 100px;
 
         }
         *, *::before, *::after {
@@ -108,12 +109,13 @@
             transform-origin: var(--x, var(--start-position-x, 1000px)) var(--y, var(--start-position-y, 1900px));
             translate: calc(var(--x, var(--start-position-x, 1000px)) * -1) calc(var(--y, var(--start-position-y, 1900px)) * -1);
             transform-style: preserve-3d;
-            transform: rotateX(90deg) translateY(var(--perspective, 1000px)) rotateY(var(--headtilt, 0deg)) translateZ(var(--headbob, -55px)) rotateZ(var(--angle, 0rad));
+            transform: rotateX(1.57rad) translateY(var(--perspective, 1000px)) rotateY(var(--headtilt, 0deg)) translateZ(var(--headbob, -55px)) rotateZ(var(--angle, 0rad));
             transition: transform 100ms ease;
 
             &.topdown {
-                transform: rotateZ(var(--angle, 0rad) );
+                transform: rotateZ(var(--angle, 0rad))
             }
+
 
             &:is(.forward, .backward, .left, .right) {
                 animation: headbob 250ms ease infinite alternate;
@@ -144,10 +146,10 @@
                 transform-style: preserve-3d;
                 position: absolute;
                 height: calc(var(--wall-block-size) * 2 );
-                width: calc(var(--wall-block-size) * 2 * sibling-index());
+                width: calc(var(--wall-block-size) * 3 * sibling-index());
                 background: oklch(from var(--main) l c h / 0.1);
-                transform: translate3d(-50%, calc(-100px - (sibling-index() * 15px)), 0) rotateX(90deg);
-                transition: opacity 500ms linear;
+                transform: translate3d(-50%, calc((var(--fog-distance) * -1) - (sibling-index() * 10px)), 0) rotateX(90deg);
+                transition: transform 500ms linear;
 
                 .topdown & {
                     display: none;
@@ -170,6 +172,7 @@
                 transform-style: preserve-3d;
                 backface-visibility: hidden;
                 translate: 0 0 var(--half-block-size);
+
             }
 
             &.wall-block {
@@ -220,7 +223,7 @@
                 .wall {
                     background: linear-gradient(to bottom,  oklch( from rgb(255 255 255 / 0.5) l c h ) 5%, transparent 15%, transparent 75px, var(--victory) 75px);
                     backface-visibility: visible;
-                    filter: brightness(1.5);
+                    filter: brightness(10);
                 };
                 .bottom {
                     background: var(--victory);
@@ -461,6 +464,8 @@
                 START_POSITION_X : Utils.getProp('--start-position-x'),
                 START_POSITION_Y : Utils.getProp('--start-position-y'),
                 START_ANGLE      : Utils.getProp('--start-angle', true),
+                // START_V_ANGLE_X  : Utils.getProp('--start-vert-angle-x', true),
+                // START_V_ANGLE_Y  : Utils.getProp('--start-vert-angle-y', true),
                 FOG_DENSITY      : Utils.getProp('--fog-density'),
                 STEP_SIZE        : Utils.getProp('--step-size'),
                 TURN_SPEED       : Utils.getProp('--turn-speed'),
@@ -502,10 +507,11 @@
             const corridorBlock  = () => Utils.fromTemplate(DOM.corridorTemplate, '.corridor-block');
             const winspotBlock   = () => Utils.fromTemplate(DOM.winspotTemplate, '.winspot-block');
 
-            // check if labyrinth is solvable ex. path from start to winspot exists - for us in layout validation;
+            // check if labyrinth is solvable ex. path from start to winspot exists - for use in layout validation;
             const solvable = () => {
                 let [y,x] = [Utils.toLayoutCoord(Config.START_POSITION_Y), Utils.toLayoutCoord(Config.START_POSITION_X)];
                 let visited = [];
+                let winspot = false;
                 let walk = (y,x) => { 
                     visited.push([y,x]);
                     for (let [nexty,nextx] of [[y,x-1], [y-1,x],[y,x+1],[y+1,x]]) {
@@ -513,11 +519,15 @@
                         if (nexty < 0 || nexty === layout.length) continue; 
                         if (nextx < 0 || nextx === layout[nexty].length) continue;
                         if (layout[nexty][nextx] === Blocktypes.WALL) continue;
+                        if (layout[nexty][nextx] === Blocktypes.WINSPOT) {
+                            winspot = true;
+                            break;
+                        }
                         walk(nexty,nextx);
                     };
                 }
                 walk(y,x);
-                return visited.some(([y,x]) => layout[y][x] === Blocktypes.WINSPOT);
+                return winspot;
             }
 
             // validate layout - used for validation of layout correctness before game start - W.I.P
@@ -571,6 +581,7 @@
                 }
             };
 
+
             // function to generate parts of minimap layout and return generated part if necessary
             const addToMap = (type, y,x, returnBlock = false) => {
                 const block = Utils.createElement('div',{
@@ -589,9 +600,13 @@
                 position = addToMap('position', dy, dx, true); 
             }
 
-            // set fog obscuring the view to create effect of distant darkness
+            // set fog obscuring the view to create effect of distant darkness or disable it if --fog-density css variable is set to 0;
             const setFog = () => {
                 const fogPlane = DOM.cam.querySelector('.fog');
+                if (Config.FOG_DENSITY === 0 ) {
+                    fogPlane.remove();
+                    return;
+                }
                 for (let i = 0; i < Config.FOG_DENSITY; i++ ) {
                     const fog = fogPlane.cloneNode(true);
                     DOM.cam.append(fog);
@@ -754,7 +769,7 @@
                 KeyE: {
                     pressed: false,
                     action: actions.right
-                }
+                },
             });
 
             // event handler for keypresses
@@ -798,10 +813,38 @@
                     Mouse.previusX = Mouse.currentX;
 
 
-                    // update player position on minimap
+                    // get current player layout coords 
                     let px = Utils.toLayoutCoord(Player.x);
                     let py = Utils.toLayoutCoord(Player.y);
-                    position.style.transform = `translate(${px*10}px, ${py*10}px)`;  
+
+                    //update player position on minimap
+                    position.style.transform = `translate(${px*10}px, ${py*10}px)`; 
+                    
+
+                    // if fog is enabled, when player is near winspot and facing it, move fog further away to make environment brighter and stil keep background corridors dark
+                    // TODO - may be used in future near blocks with sources of light?
+                    // casts a ray from player position and moves a point on ot until it meets obstacle, when winspot is the obstacle, updates the fog
+                    if (Config.FOG_DENSITY > 0) {
+                        let obstacle = false;
+                        let point = 10 
+                        while (obstacle === false) {
+                            let dy = Player.y - point * Math.cos(Player.angle) ;
+                            let dx = Player.x - point * Math.sin(Player.angle) ;
+                            if (!Utils.inRange(dy, 0, Config.MAP_SIZE ) || !Utils.inRange(dx, 0, Config.MAP_SIZE)) {
+                                break;
+                            };
+                            dy = Utils.toLayoutCoord(dy);
+                            dx = Utils.toLayoutCoord(dx);
+                            if (layout[dy][dx] === Blocktypes.WALKABLE)  {
+                                point += 10;
+                            }
+                            else {
+                                obstacle = true;
+                                DOM.scene.style.setProperty('--fog-distance', layout[dy][dx] === Blocktypes.WINSPOT && Math.hypot(dx-px,dy-py) <= 2 ? '250px' : '100px');
+                            }
+                        }
+                    }
+                    
                    
                     // update css variables - move world around the player :)
                     DOM.scene.style.setProperty('--x', `${Player.x}px`);
