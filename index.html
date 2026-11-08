@@ -502,12 +502,39 @@
             const corridorBlock  = () => Utils.fromTemplate(DOM.corridorTemplate, '.corridor-block');
             const winspotBlock   = () => Utils.fromTemplate(DOM.winspotTemplate, '.winspot-block');
 
+            // check if labyrinth is solvable ex. path from start to winspot exists - for us in layout validation;
+            const solvable = () => {
+                let [y,x] = [Utils.toLayoutCoord(Config.START_POSITION_Y), Utils.toLayoutCoord(Config.START_POSITION_X)];
+                let visited = [];
+                let walk = (y,x) => { 
+                    visited.push([y,x]);
+                    for (let [nexty,nextx] of [[y,x-1], [y-1,x],[y,x+1],[y+1,x]]) {
+                        if (visited.some(([prevy,prevx]) => prevy === nexty && prevx === nextx)) continue;
+                        if (nexty < 0 || nexty === layout.length) continue; 
+                        if (nextx < 0 || nextx === layout[nexty].length) continue;
+                        if (layout[nexty][nextx] === Blocktypes.WALL) continue;
+                        walk(nexty,nextx);
+                    };
+                }
+                walk(y,x);
+                return visited.some(([y,x]) => layout[y][x] === Blocktypes.WINSPOT);
+            }
+
             // validate layout - used for validation of layout correctness before game start - W.I.P
+            // checks if:
+            // - layout has specific diensions
+            // - values represent allowed block types
+            // - winspot is present
+            // - starting position is walkable, (e.x. not placed inside a wall)
+            // - if lbyrinth is solvable
             const validateLayout = () => {
                 const hasEqualDimensions   = num => layout.length === num && layout.every(row => row.length === num );
                 const hasAllowedBlocktypes = layout.every(y => y.every(value => [...Object.values(Blocktypes)].includes(value))); 
                 const hasWinspot           = layout.some(x => x.some(y => y === Blocktypes.WINSPOT ))
-                return hasEqualDimensions(20) && hasAllowedBlocktypes && hasWinspot;
+                let [y, x]                 = [Utils.toLayoutCoord(Config.START_POSITION_Y), Utils.toLayoutCoord(Config.START_POSITION_X)];
+                const walkableStart        = layout[y][x] === Blocktypes.WALKABLE;
+                const isSolvable           = solvable();
+                return hasEqualDimensions(20) && hasAllowedBlocktypes && hasWinspot && walkableStart && isSolvable;
             }
 
             // go through each layout cell and execute specified callback on it - used for mainly generating world and minimap,
